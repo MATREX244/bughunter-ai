@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BugHunterAI - Autonomous Pentesting</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; }
+        .terminal { background-color: #000; font-family: 'Courier New', Courier, monospace; }
+        .ai-thought { border-left: 4px solid #3b82f6; }
+        .finding-critical { border-left: 4px solid #ef4444; }
+        .finding-high { border-left: 4px solid #f97316; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <nav class="border-b border-slate-800 p-4 flex justify-between items-center bg-slate-900">
+        <div class="flex items-center space-x-2">
+            <i class="fas fa-bug text-blue-500 text-2xl"></i>
+            <span class="text-xl font-bold tracking-tight">BugHunter<span class="text-blue-500">AI</span></span>
+        </div>
+        <div class="space-x-4">
+            <button class="text-slate-400 hover:text-white"><i class="fas fa-cog"></i></button>
+            <button class="text-slate-400 hover:text-white"><i class="fas fa-book"></i></button>
+        </div>
+    </nav>
+
+    <main class="p-6 max-w-7xl mx-auto">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Configuração -->
+            <div class="lg:col-span-1 space-y-6">
+                <div class="bg-slate-900 p-6 rounded-xl border border-slate-800">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fas fa-rocket mr-2 text-blue-500"></i> Novo Scan
+                    </h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-1">Domínio Alvo</label>
+                            <input id="target" type="text" placeholder="exemplo.com" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-1">Modo</label>
+                            <select id="mode" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 outline-none">
+                                <option value="Full">Full Scan (Recon + Exploit)</option>
+                                <option value="Recon">Apenas Reconhecimento</option>
+                                <option value="Exploit">Apenas Exploração</option>
+                            </select>
+                        </div>
+                        <button onclick="startScan()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-200">
+                            INICIAR SCAN
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-900 p-6 rounded-xl border border-slate-800">
+                    <h2 class="text-lg font-semibold mb-4">Estatísticas</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-slate-800 p-4 rounded-lg text-center">
+                            <div class="text-2xl font-bold text-red-500" id="stat-critical">0</div>
+                            <div class="text-xs text-slate-400">Críticos</div>
+                        </div>
+                        <div class="bg-slate-800 p-4 rounded-lg text-center">
+                            <div class="text-2xl font-bold text-orange-500" id="stat-high">0</div>
+                            <div class="text-xs text-slate-400">Altos</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Monitoramento -->
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+                    <div class="flex border-b border-slate-800">
+                        <button onclick="switchTab('ai')" class="px-6 py-3 text-sm font-medium border-b-2 border-blue-500 text-blue-500">AI Brain</button>
+                        <button onclick="switchTab('terminal')" class="px-6 py-3 text-sm font-medium text-slate-400 hover:text-white">Terminal</button>
+                        <button onclick="switchTab('findings')" class="px-6 py-3 text-sm font-medium text-slate-400 hover:text-white">Findings</button>
+                    </div>
+                    
+                    <div id="tab-ai" class="p-4 h-[500px] overflow-y-auto space-y-3">
+                        <div class="text-slate-500 italic text-center mt-20">Aguardando início do scan...</div>
+                    </div>
+
+                    <div id="tab-terminal" class="hidden p-4 h-[500px] overflow-y-auto terminal text-green-400 text-sm">
+                        <div class="text-slate-500 italic text-center mt-20">Nenhum comando executado ainda.</div>
+                    </div>
+
+                    <div id="tab-findings" class="hidden p-4 h-[500px] overflow-y-auto space-y-4">
+                        <div class="text-slate-500 italic text-center mt-20">Nenhuma vulnerabilidade encontrada.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let ws;
+        const clientId = Math.random().toString(36).substring(7);
+
+        function switchTab(tab) {
+            ['ai', 'terminal', 'findings'].forEach(t => {
+                document.getElementById(`tab-${t}`).classList.add('hidden');
+            });
+            document.getElementById(`tab-${tab}`).classList.remove('hidden');
+        }
+
+        function startScan() {
+            const target = document.getElementById('target').value;
+            const mode = document.getElementById('mode').value;
+            
+            if (!target) return alert('Insira um alvo!');
+
+            fetch('/api/scan/start', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({target, mode})
+            });
+
+            initWebSocket();
+        }
+
+        function initWebSocket() {
+            ws = new WebSocket(`ws://${window.location.host}/ws/${clientId}`);
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            };
+        }
+
+        function handleMessage(data) {
+            const aiTab = document.getElementById('tab-ai');
+            const terminalTab = document.getElementById('tab-terminal');
+            const findingsTab = document.getElementById('tab-findings');
+
+            if (data.type === 'ai_thought') {
+                if (aiTab.innerText.includes('Aguardando')) aiTab.innerHTML = '';
+                aiTab.innerHTML += `
+                    <div class="ai-thought bg-slate-800 p-3 rounded-r-lg">
+                        <span class="mr-2">${data.icon}</span>
+                        <span class="text-sm">${data.message}</span>
+                    </div>
+                `;
+                aiTab.scrollTop = aiTab.scrollHeight;
+            }
+
+            if (data.type === 'command_executed') {
+                if (terminalTab.innerText.includes('Nenhum')) terminalTab.innerHTML = '';
+                terminalTab.innerHTML += `
+                    <div class="mb-4">
+                        <div class="text-blue-400">$ ${data.command}</div>
+                        <div class="text-slate-300 whitespace-pre-wrap">${data.output}</div>
+                        <div class="text-xs text-slate-500 mt-1">Exit: ${data.exit_code} | Duration: ${data.duration}s</div>
+                    </div>
+                `;
+                terminalTab.scrollTop = terminalTab.scrollHeight;
+            }
+        }
+    </script>
+</body>
+</html>
